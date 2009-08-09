@@ -20,4 +20,4 @@ library
                    containers >= 0.2.0.1 && < 0.3
     exposed-modules: Data.EnumMap
     hs-source-dirs: src/
-    ghc-options: -Wall
+    ghc-options: -O2 -Wall

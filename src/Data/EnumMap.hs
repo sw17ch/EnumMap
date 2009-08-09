@@ -200,9 +200,11 @@ infixl 9 \\{-This comment teaches CPP correct behaviour -}
 -- A "Nat" is a natural machine word (an unsigned Int)
 type Nat = Word
 
+{-# INLINE natFromInt #-}
 natFromInt :: (Enum k) => k -> Nat
 natFromInt i = fromIntegral . fromEnum $ i
 
+{-# INLINE intFromNat #-}
 intFromNat :: (Enum k) => Nat -> k
 intFromNat w = toEnum . fromIntegral $ w
 
@@ -389,7 +391,7 @@ singleton k x
 -- > insert 5 'x' (fromList [(5,'a'), (3,'b')]) == fromList [(3, 'b'), (5, 'x')]
 -- > insert 7 'x' (fromList [(5,'a'), (3,'b')]) == fromList [(3, 'b'), (5, 'a'), (7, 'x')]
 -- > insert 5 'x' empty                         == singleton 5 'x'
-
+{-# SPECIALIZE insert :: Int -> a -> EnumMap Int a -> EnumMap Int a #-}
 insert :: (Enum k) => k -> a -> EnumMap k a -> EnumMap k a
 insert k x t
   = case t of
@@ -1674,6 +1676,7 @@ withEmpty bars = "   ":bars
 {--------------------------------------------------------------------
   Join
 --------------------------------------------------------------------}
+{-# SPECIALIZE join :: Prefix -> EnumMap Int a -> Prefix -> EnumMap Int a -> EnumMap Int a #-}
 join :: Prefix -> EnumMap k a -> Prefix -> EnumMap k a -> EnumMap k a
 join p1 t1 p2 t2
   | zero p1 m = Bin p m t1 t2
