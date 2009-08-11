@@ -165,43 +165,55 @@ fromListWith f as = let g (k,a) = (u k, a)
                     in EnumMap $ M.fromListWith f $ Prelude.map g as
 
 fromListWithKey :: Enum k => (Key k -> a -> a -> a) -> [(Key k, a)] -> EnumMap k a
-{-
 fromListWithKey f as = let g (k,a) = (u k, a)
-                       in EnumMap $ M.fromListWith (f . t) (Prelude.map g as)
--}
-fromListWithKey = undefined
+                       in EnumMap $ M.fromListWithKey (f . t) (Prelude.map g as)
 
 toAscList :: Enum k => EnumMap k a -> [(Key k, a)]
-toAscList  = undefined
+toAscList m = let f (k,v) = (Key . toEnum $ k, v)
+              in Prelude.map f $ M.toAscList (uEM m)
+
 fromAscList :: Enum k => [(Key k, a)] -> EnumMap k a
-fromAscList  = undefined
+fromAscList as = let f (k,v) = (u k,v)
+                 in EnumMap $ M.fromAscList $ Prelude.map f as
+
 fromAscListWith :: Enum k => (a -> a -> a) -> [(Key k, a)] -> EnumMap k a
-fromAscListWith  = undefined
-fromAscListWithKey :: (Key k -> a -> a -> a) -> [(Key k, a)] -> EnumMap k a
-fromAscListWithKey  = undefined
-fromDistinctAscList :: [(Key k, a)] -> EnumMap k a
-fromDistinctAscList  = undefined
+fromAscListWith f as = let g (k,v) = (u k, v)
+                       in EnumMap $ M.fromAscListWith f (Prelude.map g as)
+
+fromAscListWithKey :: Enum k => (Key k -> a -> a -> a) -> [(Key k, a)] -> EnumMap k a
+fromAscListWithKey f as = let g (k,v) = (u k, v)
+                          in EnumMap $ M.fromAscListWithKey (f . t) $ Prelude.map g as
+
+fromDistinctAscList :: Enum k => [(Key k, a)] -> EnumMap k a
+fromDistinctAscList as = let f (k,v) = (u k, v)
+                         in EnumMap $ M.fromDistinctAscList $ Prelude.map f as
+
 filter :: (a -> Bool) -> EnumMap k a -> EnumMap k a
-filter  = undefined
-filterWithKey :: (Key k -> a -> Bool) -> EnumMap k a -> EnumMap k a
-filterWithKey  = undefined
-partition :: (a -> Bool) -> EnumMap k a -> (EnumMap k a, EnumMap k a)
-partition  = undefined
-partitionWithKey :: (Key k -> a -> Bool) -> EnumMap k a -> (EnumMap k a, EnumMap k a)
-partitionWithKey  = undefined
-mapMaybe :: (a -> Maybe b) -> EnumMap k a -> EnumMap k b
+filter f m = EnumMap $ M.filter f (uEM m)
+
+filterWithKey :: Enum k => (Key k -> a -> Bool) -> EnumMap k a -> EnumMap k a
+filterWithKey f m = EnumMap $ M.filterWithKey (f . t) (uEM m)
+
+partition :: Enum k => (a -> Bool) -> EnumMap k a -> (EnumMap k a, EnumMap k a)
+partition f m = let (m1,m2) = M.partition f (uEM m) in (EnumMap m1, EnumMap m2)
+
+partitionWithKey :: Enum k => (Key k -> a -> Bool) -> EnumMap k a -> (EnumMap k a, EnumMap k a)
+partitionWithKey f m = let (m1,m2) = M.partitionWithKey (f . t) (uEM m)
+                       in (EnumMap m1, EnumMap m2)
+
+mapMaybe :: Enum k => (a -> Maybe b) -> EnumMap k a -> EnumMap k b
 mapMaybe  = undefined
-mapMaybeWithKey :: (Key k -> a -> Maybe b) -> EnumMap k a -> EnumMap k b
+mapMaybeWithKey :: Enum k => (Key k -> a -> Maybe b) -> EnumMap k a -> EnumMap k b
 mapMaybeWithKey  = undefined
-mapEither :: (a -> Either b c) -> EnumMap k a -> (EnumMap k b, EnumMap k c)
+mapEither :: Enum k => (a -> Either b c) -> EnumMap k a -> (EnumMap k b, EnumMap k c)
 mapEither  = undefined
-mapEitherWithKey :: (Key k -> a -> Either b c) -> EnumMap k a -> (EnumMap k b, EnumMap k c)
+mapEitherWithKey :: Enum k => (Key k -> a -> Either b c) -> EnumMap k a -> (EnumMap k b, EnumMap k c)
 mapEitherWithKey  = undefined
-split :: Key k -> EnumMap k a -> (EnumMap k a, EnumMap k a)
+split :: Enum k => Key k -> EnumMap k a -> (EnumMap k a, EnumMap k a)
 split  = undefined
-splitLookup :: Key k -> EnumMap k a -> (EnumMap k a, Maybe a, EnumMap k a)
+splitLookup :: Enum k => Key k -> EnumMap k a -> (EnumMap k a, Maybe a, EnumMap k a)
 splitLookup  = undefined
-isSubmapOf :: Eq a => EnumMap k a -> EnumMap k a -> Bool
+isSubmapOf :: (Eq a, Enum k) => EnumMap k a -> EnumMap k a -> Bool
 isSubmapOf  = undefined
 isSubmapOfBy :: (a -> b -> Bool) -> EnumMap k a -> EnumMap k b -> Bool
 isSubmapOfBy  = undefined
