@@ -2,7 +2,6 @@
 
 module Data.EnumMap (
     EnumMap,
-    Key(..),
     (!), (\\),
     null, size,
     member, notMember,
@@ -45,11 +44,13 @@ import qualified Data.IntSet as IS
 newtype EnumMap k v = EnumMap (M.IntMap v)
     deriving (Show)
 
+{-
 data Key k = Key k
     deriving (Show, Eq)
+-}
 
-u :: Enum k => Key k -> Int
-u (Key k) = fromEnum k
+u :: Enum k => k -> Int
+u = fromEnum
 
 uEM :: EnumMap k v -> M.IntMap v
 uEM (EnumMap m) = m
@@ -306,18 +307,18 @@ updateMin f m = EnumMap $ M.updateMin f (uEM m)
 updateMax :: (a -> a) -> EnumMap k a -> EnumMap k a
 updateMax f m = EnumMap $ M.updateMax f (uEM m)
 
-updateMinWithKey :: Enum k => (Key k -> a -> a) -> EnumMap k a -> EnumMap k a
+updateMinWithKey :: Enum k => (k -> a -> a) -> EnumMap k a -> EnumMap k a
 updateMinWithKey f m = EnumMap $ M.updateMinWithKey (f . t) (uEM m)
 
-updateMaxWithKey :: Enum k => (Key k -> a -> a) -> EnumMap k a -> EnumMap k a
+updateMaxWithKey :: Enum k => (k -> a -> a) -> EnumMap k a -> EnumMap k a
 updateMaxWithKey f m = EnumMap $ M.updateMaxWithKey (f . t) (uEM m)
 
-minViewWithKey :: Enum k => EnumMap k a -> Maybe ((Key k, a), EnumMap k a)
-minViewWithKey m = let f ((k,a),m') = ((Key . toEnum $ k,a),EnumMap m')
+minViewWithKey :: Enum k => EnumMap k a -> Maybe ((k, a), EnumMap k a)
+minViewWithKey m = let f ((k,a),m') = ((t k,a),EnumMap m')
                    in fmap f $ M.minViewWithKey (uEM m)
 
-maxViewWithKey :: Enum k => EnumMap k a -> Maybe ((Key k, a), EnumMap k a)
-maxViewWithKey m = let f ((k,a),m') = ((Key . toEnum $ k,a),EnumMap m')
+maxViewWithKey :: Enum k => EnumMap k a -> Maybe ((k, a), EnumMap k a)
+maxViewWithKey m = let f ((k,a),m') = ((t k,a),EnumMap m')
                    in fmap f $ M.maxViewWithKey (uEM m)
 
 showTree :: Show a => EnumMap k a -> String
