@@ -3,19 +3,56 @@
 module Data.EnumMap (
     EnumMap,
     Key(..),
+    (!), (\\),
+    null, size,
+    member, notMember,
+    lookup, findWithDefault,
+    empty, singleton,
+    insert, insertWith, insertWithKey, insertLookupWithKey,
+    delete, adjust, adjustWithKey,
+    update, updateWithKey, updateLookupWithKey,
+    alter, union, unionWith, unionWithKey,
+    unions, unionsWith,
+    difference, differenceWith, differenceWithKey,
+    intersection, intersectionWith, intersectionWithKey,
+    map, mapWithKey, mapAccum, mapAccumWithKey,
+    fold, foldWithKey,
+    elems, keys, keysSet,
+    assocs, toList, fromList, fromListWith, fromListWithKey,
+    toAscList, fromAscList, fromAscListWith, fromAscListWithKey,
+    fromDistinctAscList,
+    filter, filterWithKey,
+    partition, partitionWithKey,
+    mapMaybe, mapMaybeWithKey, mapEither, mapEitherWithKey,
+    split, splitLookup,
+    isSubmapOf, isSubmapOfBy,
+    isProperSubmapOf, isProperSubmapOfBy,
+    maxView, minView,
+    findMin, findMax,
+    deleteMin, deleteMax,
+    deleteFindMin, deleteFindMax,
+    updateMin, updateMax,
+    updateMinWithKey, updateMaxWithKey,
+    minViewWithKey, maxViewWithKey,
+    showTree, showTreeWith,
 ) where
 
 import qualified Data.IntMap as M
-import Prelude
+import Prelude hiding (map,null,lookup,filter)
 import qualified Prelude
-import Data.IntSet
+import qualified Data.IntSet as IS
 
-newtype EnumMap k v = EnumMap { uEM :: M.IntMap v }
+newtype EnumMap k v = EnumMap (M.IntMap v)
+    deriving (Show)
 
-data Key k = (Enum k) => Key { uK :: k }
+data Key k = Key k
+    deriving (Show, Eq)
 
 u :: Enum k => Key k -> Int
-u = fromEnum . uK
+u (Key k) = fromEnum k
+
+uEM :: EnumMap k v -> M.IntMap v
+uEM (EnumMap m) = m
 
 t :: Enum k => M.Key -> Key k
 t = Key . toEnum
@@ -145,7 +182,7 @@ keys :: Enum k => EnumMap k a -> [Key k]
 keys = Prelude.map t . M.keys . uEM
 
 -- TODO: When we have an EnumSet, we'll need to revisit this.
-keysSet :: Enum k => EnumMap k a -> IntSet
+keysSet :: Enum k => EnumMap k a -> IS.IntSet
 keysSet = M.keysSet . uEM
 
 assocs :: Enum k => EnumMap k a -> [(Key k, a)]
@@ -202,54 +239,89 @@ partitionWithKey f m = let (m1,m2) = M.partitionWithKey (f . t) (uEM m)
                        in (EnumMap m1, EnumMap m2)
 
 mapMaybe :: Enum k => (a -> Maybe b) -> EnumMap k a -> EnumMap k b
-mapMaybe  = undefined
+mapMaybe f m = EnumMap $ M.mapMaybe f (uEM m)
+
 mapMaybeWithKey :: Enum k => (Key k -> a -> Maybe b) -> EnumMap k a -> EnumMap k b
-mapMaybeWithKey  = undefined
+mapMaybeWithKey f m = EnumMap $ M.mapMaybeWithKey (f . t) (uEM m)
+
 mapEither :: Enum k => (a -> Either b c) -> EnumMap k a -> (EnumMap k b, EnumMap k c)
-mapEither  = undefined
+mapEither f m = let (m1,m2) = M.mapEither f (uEM m)
+                in (EnumMap m1, EnumMap m2)
+
 mapEitherWithKey :: Enum k => (Key k -> a -> Either b c) -> EnumMap k a -> (EnumMap k b, EnumMap k c)
-mapEitherWithKey  = undefined
+mapEitherWithKey f m = let (m1,m2) = M.mapEitherWithKey (f . t) (uEM m)
+                       in (EnumMap m1, EnumMap m2)
+
 split :: Enum k => Key k -> EnumMap k a -> (EnumMap k a, EnumMap k a)
-split  = undefined
+split k m = let (m1,m2) = M.split (u k) (uEM m)
+            in (EnumMap m1, EnumMap m2)
+
 splitLookup :: Enum k => Key k -> EnumMap k a -> (EnumMap k a, Maybe a, EnumMap k a)
-splitLookup  = undefined
+splitLookup k m = let (m1,a,m2) = M.splitLookup (u k) (uEM m)
+                  in (EnumMap m1, a, EnumMap m2)
+
 isSubmapOf :: (Eq a, Enum k) => EnumMap k a -> EnumMap k a -> Bool
-isSubmapOf  = undefined
+isSubmapOf m1 m2 = M.isSubmapOf (uEM m1) (uEM m2)
+
 isSubmapOfBy :: (a -> b -> Bool) -> EnumMap k a -> EnumMap k b -> Bool
-isSubmapOfBy  = undefined
+isSubmapOfBy f m1 m2 = M.isSubmapOfBy f (uEM m1) (uEM m2)
+
 isProperSubmapOf :: Eq a => EnumMap k a -> EnumMap k a -> Bool
-isProperSubmapOf  = undefined
+isProperSubmapOf m1 m2 = M.isProperSubmapOf (uEM m1) (uEM m2)
+
 isProperSubmapOfBy :: (a -> b -> Bool) -> EnumMap k a -> EnumMap k b -> Bool
-isProperSubmapOfBy  = undefined
+isProperSubmapOfBy f m1 m2 = M.isProperSubmapOfBy f (uEM m1) (uEM m2)
+
 maxView :: EnumMap k a -> Maybe (a, EnumMap k a)
-maxView  = undefined
+maxView m = let f (a,m') = (a, EnumMap m')
+            in fmap f $ M.maxView (uEM m)
+            
 minView :: EnumMap k a -> Maybe (a, EnumMap k a)
-minView  = undefined
+minView m = let f (a,m') = (a, EnumMap m')
+            in fmap f $ M.minView (uEM m)
+
 findMin :: EnumMap k a -> a
-findMin  = undefined
+findMin  = M.findMin . uEM
+
 findMax :: EnumMap k a -> a
-findMax  = undefined
+findMax  = M.findMax . uEM
+
 deleteMin :: EnumMap k a -> EnumMap k a
-deleteMin  = undefined
+deleteMin = EnumMap . M.deleteMin . uEM
+
 deleteMax :: EnumMap k a -> EnumMap k a
-deleteMax  = undefined
+deleteMax = EnumMap . M.deleteMax . uEM
+
 deleteFindMin :: EnumMap k a -> (a, EnumMap k a)
-deleteFindMin  = undefined
+deleteFindMin m = let (a,m') = M.deleteFindMin (uEM m)
+                  in (a,EnumMap m')
+
 deleteFindMax :: EnumMap k a -> (a, EnumMap k a)
-deleteFindMax  = undefined
+deleteFindMax m = let (a,m') = M.deleteFindMax (uEM m)
+                  in (a,EnumMap m')
+
 updateMin :: (a -> a) -> EnumMap k a -> EnumMap k a
-updateMin  = undefined
+updateMin f m = EnumMap $ M.updateMin f (uEM m)
+
 updateMax :: (a -> a) -> EnumMap k a -> EnumMap k a
-updateMax  = undefined
-updateMinWithKey :: (Key k -> a -> a) -> EnumMap k a -> EnumMap k a
-updateMinWithKey  = undefined
-updateMaxWithKey :: (Key k -> a -> a) -> EnumMap k a -> EnumMap k a
-updateMaxWithKey  = undefined
-minViewWithKey :: EnumMap k a -> Maybe ((Key k, a), EnumMap k a)
-minViewWithKey  = undefined
-maxViewWithKey :: EnumMap k a -> Maybe ((Key k, a), EnumMap k a)
-maxViewWithKey  = undefined
+updateMax f m = EnumMap $ M.updateMax f (uEM m)
+
+updateMinWithKey :: Enum k => (Key k -> a -> a) -> EnumMap k a -> EnumMap k a
+updateMinWithKey f m = EnumMap $ M.updateMinWithKey (f . t) (uEM m)
+
+updateMaxWithKey :: Enum k => (Key k -> a -> a) -> EnumMap k a -> EnumMap k a
+updateMaxWithKey f m = EnumMap $ M.updateMaxWithKey (f . t) (uEM m)
+
+minViewWithKey :: Enum k => EnumMap k a -> Maybe ((Key k, a), EnumMap k a)
+minViewWithKey m = let f ((k,a),m') = ((Key . toEnum $ k,a),EnumMap m')
+                   in fmap f $ M.minViewWithKey (uEM m)
+
+maxViewWithKey :: Enum k => EnumMap k a -> Maybe ((Key k, a), EnumMap k a)
+maxViewWithKey m = let f ((k,a),m') = ((Key . toEnum $ k,a),EnumMap m')
+                   in fmap f $ M.maxViewWithKey (uEM m)
+
 showTree :: Show a => EnumMap k a -> String
-showTree  = undefined
+showTree = show
+
 showTreeWith :: Show a => Bool -> Bool -> EnumMap k a -> String
-showTreeWith  = undefined
+showTreeWith a b m = M.showTreeWith a b (uEM m)
