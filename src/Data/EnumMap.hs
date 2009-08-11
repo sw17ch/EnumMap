@@ -60,7 +60,8 @@ insertWithKey :: Enum k => (Key k -> a -> a -> a) -> Key k -> a -> EnumMap k a -
 insertWithKey f k v m = EnumMap $ M.insertWithKey (f . t) (u k) v (uEM m)
 
 insertLookupWithKey :: Enum k => (Key k -> a -> a -> a) -> Key k -> a -> EnumMap k a -> (Maybe a, EnumMap k a)
-insertLookupWithKey = undefined
+insertLookupWithKey f k i m = let (a,m') = M.insertLookupWithKey (f . t) (u k) i (uEM m)
+                              in  (a, EnumMap m')
 
 delete :: Enum k => Key k -> EnumMap k a -> EnumMap k a
 delete k m = EnumMap $ M.delete (u k) (uEM m)
@@ -100,50 +101,81 @@ unionsWith :: Enum k => (a -> a -> a) -> [EnumMap k a] -> EnumMap k a
 unionsWith f ms = EnumMap $ M.unionsWith f $ Prelude.map uEM ms
 
 difference :: Enum k => EnumMap k a -> EnumMap k b -> EnumMap k a
-difference  = undefined
+difference m1 m2 = EnumMap $ M.difference (uEM m1) (uEM m2)
+
 differenceWith :: Enum k => (a -> b -> Maybe a) -> EnumMap k a -> EnumMap k b -> EnumMap k a
-differenceWith  = undefined
+differenceWith f m1 m2 = EnumMap $ M.differenceWith f (uEM m1) (uEM m2)
+
 differenceWithKey :: Enum k => (Key k -> a -> b -> Maybe a) -> EnumMap k a -> EnumMap k b -> EnumMap k a
-differenceWithKey  = undefined
+differenceWithKey f m1 m2 = EnumMap $ M.differenceWithKey (f . t) (uEM m1) (uEM m2)
+
 intersection :: Enum k => EnumMap k a -> EnumMap k b -> EnumMap k a
-intersection  = undefined
+intersection m1 m2 = EnumMap $ M.intersection (uEM m1) (uEM m2)
+
 intersectionWith :: Enum k => (a -> b -> a) -> EnumMap k a -> EnumMap k b -> EnumMap k a
-intersectionWith  = undefined
+intersectionWith f m1 m2 = EnumMap $ M.intersectionWith f (uEM m1) (uEM m2)
+
 intersectionWithKey :: Enum k => (Key k -> a -> b -> a) -> EnumMap k a -> EnumMap k b -> EnumMap k a
-intersectionWithKey  = undefined
+intersectionWithKey f m1 m2 = EnumMap $ M.intersectionWithKey (f . t) (uEM m1) (uEM m2)
+
 map :: Enum k => (a -> b) -> EnumMap k a -> EnumMap k b
-map  = undefined
-mapWithKey :: (Key k -> a -> b) -> EnumMap k a -> EnumMap k b
-mapWithKey  = undefined
-mapAccum :: (a -> b -> (a, c)) -> a -> EnumMap k b -> (a, EnumMap k c)
-mapAccum  = undefined
-mapAccumWithKey :: (a -> Key k -> b -> (a, c)) -> a -> EnumMap k b -> (a, EnumMap k c)
-mapAccumWithKey  = undefined
-fold :: (a -> b -> b) -> b -> EnumMap k a -> b
-fold  = undefined
-foldWithKey :: (Key k -> a -> b -> b) -> b -> EnumMap k a -> b
-foldWithKey  = undefined
-elems :: EnumMap k a -> [a]
-elems  = undefined
-keys :: EnumMap k a -> [Key k]
-keys  = undefined
-keysSet :: EnumMap k a -> IntSet
-keysSet  = undefined
-assocs :: EnumMap k a -> [(Key k, a)]
-assocs  = undefined
-toList :: EnumMap k a -> [(Key k, a)]
-toList  = undefined
-fromList :: [(Key k, a)] -> EnumMap k a
-fromList  = undefined
-fromListWith :: (a -> a -> a) -> [(Key k, a)] -> EnumMap k a
-fromListWith  = undefined
-fromListWithKey :: (Key k -> a -> a -> a) -> [(Key k, a)] -> EnumMap k a
-fromListWithKey  = undefined
-toAscList :: EnumMap k a -> [(Key k, a)]
+map f m = EnumMap $ M.map f (uEM m)
+
+mapWithKey :: Enum k => (Key k -> a -> b) -> EnumMap k a -> EnumMap k b
+mapWithKey f m = EnumMap $ M.mapWithKey (f . t) (uEM m)
+
+mapAccum :: Enum k => (a -> b -> (a, c)) -> a -> EnumMap k b -> (a, EnumMap k c)
+mapAccum f i m = let (a, m') = M.mapAccum f i (uEM m) in  (a, EnumMap m')
+
+mapAccumWithKey :: Enum k => (a -> Key k -> b -> (a, c)) -> a -> EnumMap k b -> (a, EnumMap k c)
+mapAccumWithKey f i m = let f' n k = f n (Key . toEnum $ k)
+                            (a, m') = M.mapAccumWithKey f' i (uEM m)
+                        in  (a, EnumMap m')
+
+fold :: Enum k => (a -> b -> b) -> b -> EnumMap k a -> b
+fold f i m = M.fold f i (uEM m)
+
+foldWithKey :: Enum k => (Key k -> a -> b -> b) -> b -> EnumMap k a -> b
+foldWithKey f i m = M.foldWithKey (f . t) i (uEM m)
+
+elems :: Enum k => EnumMap k a -> [a]
+elems m = M.elems (uEM m)
+
+keys :: Enum k => EnumMap k a -> [Key k]
+keys = Prelude.map t . M.keys . uEM
+
+-- TODO: When we have an EnumSet, we'll need to revisit this.
+keysSet :: Enum k => EnumMap k a -> IntSet
+keysSet = M.keysSet . uEM
+
+assocs :: Enum k => EnumMap k a -> [(Key k, a)]
+assocs = let f (k,a) = (Key . toEnum $ k, a)
+         in Prelude.map f . M.assocs . uEM
+
+toList :: Enum k => EnumMap k a -> [(Key k, a)]
+toList = let f (k,a) = (Key . toEnum $ k, a)
+         in Prelude.map f . M.toList . uEM
+
+fromList :: Enum k => [(Key k, a)] -> EnumMap k a
+fromList = let f (k,a) = (u k, a)
+           in EnumMap . M.fromList . Prelude.map f
+
+fromListWith :: Enum k => (a -> a -> a) -> [(Key k, a)] -> EnumMap k a
+fromListWith f as = let g (k,a) = (u k, a)
+                    in EnumMap $ M.fromListWith f $ Prelude.map g as
+
+fromListWithKey :: Enum k => (Key k -> a -> a -> a) -> [(Key k, a)] -> EnumMap k a
+{-
+fromListWithKey f as = let g (k,a) = (u k, a)
+                       in EnumMap $ M.fromListWith (f . t) (Prelude.map g as)
+-}
+fromListWithKey = undefined
+
+toAscList :: Enum k => EnumMap k a -> [(Key k, a)]
 toAscList  = undefined
-fromAscList :: [(Key k, a)] -> EnumMap k a
+fromAscList :: Enum k => [(Key k, a)] -> EnumMap k a
 fromAscList  = undefined
-fromAscListWith :: (a -> a -> a) -> [(Key k, a)] -> EnumMap k a
+fromAscListWith :: Enum k => (a -> a -> a) -> [(Key k, a)] -> EnumMap k a
 fromAscListWith  = undefined
 fromAscListWithKey :: (Key k -> a -> a -> a) -> [(Key k, a)] -> EnumMap k a
 fromAscListWithKey  = undefined
