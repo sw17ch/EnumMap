@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP,
              DeriveDataTypeable, DeriveGeneric,
-             NoBangPatterns,
+             FlexibleInstances, MultiParamTypeClasses,
+             BangPatterns,
              MagicHash
              #-}
 -----------------------------------------------------------------------------
@@ -100,10 +101,13 @@ module Data.EnumMap  (
             , mapWithKey
             , mapAccum
             , mapAccumWithKey
+            , mapKeys
+            , mapKeysWith
 
             -- ** Fold
             , fold
             , foldWithKey
+            , foldMapWithKey
 
             -- * Conversion
             , elems
@@ -167,6 +171,7 @@ module Data.EnumMap  (
 
 import Prelude hiding (lookup,map,filter,foldr,foldl,null)
 import qualified Prelude
+import Control.Applicative (Applicative, liftA2)
 import Data.Bits
 import qualified Data.IntSet as IntSet
 import Data.Monoid (Monoid(..))
@@ -175,6 +180,7 @@ import Data.Typeable
 import Data.Foldable (Foldable(foldMap))
 import Control.Monad ( liftM )
 import GHC.Generics (Generic)
+import Control.Lens (FunctorWithIndex(imap), TraversableWithIndex(itraverse), FoldableWithIndex(ifoldMap))
 {-
 -- just for testing
 import qualified Prelude
@@ -235,8 +241,8 @@ magicShiftRL x i   = shiftR x i
 -- > fromList [(5,'a'), (3,'b')] ! 1    Error: element not in the map
 -- > fromList [(5,'a'), (3,'b')] ! 5 == 'a'
 
-(!) :: (Enum k) => EnumMap k a -> k -> a
-m ! k    = find' k m
+(!) :: Enum k => EnumMap k a -> k -> a
+(!) m k    = find' k m
 
 -- | Same as 'difference'.
 (\\) :: (Enum k) => EnumMap k a -> EnumMap k b -> EnumMap k a
@@ -264,6 +270,10 @@ instance Foldable (EnumMap k) where
     foldMap _ Nil = mempty
     foldMap f (Tip _k v) = f v
     foldMap f (Bin _ _ l r) = foldMap f l `mappend` foldMap f r
+
+instance Enum k => Traversable (EnumMap k) where
+  traverse f = traverseWithKey (\_ -> f)
+  {-# INLINE traverse #-}
 
 {--------------------------------------------------------------------
   Query
@@ -1116,6 +1126,40 @@ mapAccumL f a t
       Tip k x     -> let (a',x') = f a (toEnum k) x in (a',Tip k x')
       Nil         -> (a,Nil)
 
+-- | /O(n*log n)/.
+-- @'mapKeys' f s@ is the map obtained by applying @f@ to each key of @s@.
+--
+-- The size of the result may be smaller if @f@ maps two or more distinct
+-- keys to the same new key.  In this case the value at the greatest of the
+-- original keys is retained.
+--
+-- > mapKeys (+ 1) (fromList [(5,"a"), (3,"b")])                        == fromList [(4, "b"), (6, "a")]
+-- > mapKeys (\ _ -> 1) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) == singleton 1 "c"
+-- > mapKeys (\ _ -> 3) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) == singleton 3 "c"
+
+mapKeys :: (Enum k1, Enum k2, Ord k2) => (k1->k2) -> EnumMap k1 a -> EnumMap k2 a
+mapKeys f = fromList . foldWithKey (\k x xs -> (f k, x) : xs) []
+#if __GLASGOW_HASKELL__
+{-# INLINABLE mapKeys #-}
+#endif
+
+-- | /O(n*log n)/.
+-- @'mapKeysWith' c f s@ is the map obtained by applying @f@ to each key of @s@.
+--
+-- The size of the result may be smaller if @f@ maps two or more distinct
+-- keys to the same new key.  In this case the associated values will be
+-- combined using @c@. The value at the greater of the two original keys
+-- is used as the first argument to @c@.
+--
+-- > mapKeysWith (++) (\ _ -> 1) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) == singleton 1 "cdab"
+-- > mapKeysWith (++) (\ _ -> 3) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) == singleton 3 "cdab"
+
+mapKeysWith :: (Enum k1, Enum k2, Ord k2) => (a -> a -> a) -> (k1->k2) -> EnumMap k1 a -> EnumMap k2 a
+mapKeysWith c f = fromListWith c . foldWithKey (\k x xs -> (f k, x) : xs) []
+#if __GLASGOW_HASKELL__
+{-# INLINABLE mapKeysWith #-}
+#endif
+
 {-
 XXX unused code
 
@@ -1351,6 +1395,15 @@ foldWithKey :: (Enum k) => (k -> a -> b -> b) -> b -> EnumMap k a -> b
 foldWithKey f z t
   = foldr f z t
 
+-- | See 'Data.IntMap.foldMapWithKey'
+foldMapWithKey :: (Enum k, Monoid m) => (k -> a -> m) -> EnumMap k a -> m
+foldMapWithKey f = go
+  where
+    go Nil           = mempty
+    go (Tip kx x)    = f (toEnum kx) x
+    go (Bin _ _ l r) = go l `mappend` go r
+{-# INLINE foldMapWithKey #-}
+
 foldr :: (Enum k) => (k -> a -> b -> b) -> b -> EnumMap k a -> b
 foldr f z t
   = case t of
@@ -1366,6 +1419,23 @@ foldr' f z t
       Tip k x     -> f (toEnum k) x z
       Nil         -> z
 
+-- | See 'Data.IntMap.traverseWithKey'
+traverseWithKey :: Applicative t => (Key_ -> a -> t b) -> EnumMap k a -> t (EnumMap k b)
+traverseWithKey f = go
+  where
+    go Nil = pure Nil
+    go (Tip k v) = (\ !v' -> Tip k v') <$> f k v
+    go (Bin p m l r) = liftA2 (Bin p m) (go l) (go r)
+{-# INLINE traverseWithKey #-}
+
+instance Enum k => FunctorWithIndex k (EnumMap k) where
+    imap f m = mapWithKey f m
+
+instance (Enum k, Ord k) => TraversableWithIndex k (EnumMap k) where
+    itraverse f = traverseWithKey (f . toEnum)
+
+instance (Enum k, Ord k) => FoldableWithIndex k (EnumMap k) where
+    ifoldMap = foldMapWithKey
 
 
 {--------------------------------------------------------------------
