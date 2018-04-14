@@ -235,7 +235,7 @@ magicShiftRL x i   = shiftR x i
 -- > fromList [(5,'a'), (3,'b')] ! 1    Error: element not in the map
 -- > fromList [(5,'a'), (3,'b')] ! 5 == 'a'
 
-(!) :: (Show k, Enum k) => EnumMap k a -> k -> a
+(!) :: (Enum k) => EnumMap k a -> k -> a
 m ! k    = find' k m
 
 -- | Same as 'difference'.
@@ -324,10 +324,10 @@ lookupN k t
         | otherwise             -> Nothing
       Nil -> Nothing
 
-find' :: (Show k, Enum k) => k -> EnumMap k a -> a
+find' :: (Enum k) => k -> EnumMap k a -> a
 find' k m
   = case lookup k m of
-      Nothing -> error ("EnumMap.find: key " ++ show k ++ " is not an element of the map")
+      Nothing -> error "EnumMap.find': not found"
       Just x  -> x
 
 
