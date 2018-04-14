@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP,
+             DeriveDataTypeable, DeriveGeneric,
              NoBangPatterns,
              MagicHash
              #-}
@@ -42,7 +43,7 @@
 -- (32 or 64).
 -----------------------------------------------------------------------------
 
-module Data.EnumMap  ( 
+module Data.EnumMap  (
             -- * Map type
               EnumMap, Key_          -- instance Eq,Show
 
@@ -54,9 +55,9 @@ module Data.EnumMap  (
             , size
             , member
             , notMember
-	    , lookup
+            , lookup
             , findWithDefault
-            
+
             -- * Construction
             , empty
             , singleton
@@ -64,7 +65,7 @@ module Data.EnumMap  (
             -- ** Insertion
             , insert
             , insertWith, insertWithKey, insertLookupWithKey
-            
+
             -- ** Delete\/Update
             , delete
             , adjust
@@ -73,12 +74,12 @@ module Data.EnumMap  (
             , updateWithKey
             , updateLookupWithKey
             , alter
-  
+
             -- * Combine
 
             -- ** Union
-            , union         
-            , unionWith          
+            , union
+            , unionWith
             , unionWithKey
             , unions
             , unionsWith
@@ -87,9 +88,9 @@ module Data.EnumMap  (
             , difference
             , differenceWith
             , differenceWithKey
-            
+
             -- ** Intersection
-            , intersection           
+            , intersection
             , intersectionWith
             , intersectionWithKey
 
@@ -99,7 +100,7 @@ module Data.EnumMap  (
             , mapWithKey
             , mapAccum
             , mapAccumWithKey
-            
+
             -- ** Fold
             , fold
             , foldWithKey
@@ -107,9 +108,9 @@ module Data.EnumMap  (
             -- * Conversion
             , elems
             , keys
-	    , keysSet
+            , keysSet
             , assocs
-            
+
             -- ** Lists
             , toList
             , fromList
@@ -123,7 +124,7 @@ module Data.EnumMap  (
             , fromAscListWithKey
             , fromDistinctAscList
 
-            -- * Filter 
+            -- * Filter
             , filter
             , filterWithKey
             , partition
@@ -134,18 +135,18 @@ module Data.EnumMap  (
             , mapEither
             , mapEitherWithKey
 
-            , split         
-            , splitLookup   
+            , split
+            , splitLookup
 
             -- * Submap
             , isSubmapOf, isSubmapOfBy
             , isProperSubmapOf, isProperSubmapOfBy
-            
+
             -- * Min\/Max
 
             , maxView
             , minView
-            , findMin   
+            , findMin
             , findMax
             , deleteMin
             , deleteMax
@@ -154,7 +155,7 @@ module Data.EnumMap  (
             , updateMin
             , updateMax
             , updateMinWithKey
-            , updateMaxWithKey 
+            , updateMaxWithKey
             , minViewWithKey
             , maxViewWithKey
 
@@ -166,24 +167,25 @@ module Data.EnumMap  (
 
 import Prelude hiding (lookup,map,filter,foldr,foldl,null)
 import qualified Prelude
-import Data.Bits 
+import Data.Bits
 import qualified Data.IntSet as IntSet
 import Data.Monoid (Monoid(..))
 import Data.Maybe (fromMaybe)
 import Data.Typeable
 import Data.Foldable (Foldable(foldMap))
 import Control.Monad ( liftM )
+import GHC.Generics (Generic)
 {-
 -- just for testing
 import qualified Prelude
-import Debug.QuickCheck 
+import Debug.QuickCheck
 import List (nub,sort)
 import qualified List
--}  
+-}
 
 #if __GLASGOW_HASKELL__
 import Text.Read
-import Data.Data (Data(..), mkNorepType)
+import Data.Data (Data(..))
 #endif
 
 #if __GLASGOW_HASKELL__ >= 503
@@ -241,12 +243,13 @@ m ! k    = find' k m
 m1 \\ m2 = difference m1 m2
 
 {--------------------------------------------------------------------
-  Types  
+  Types
 --------------------------------------------------------------------}
 -- | A map of integers to values @a@.
 data EnumMap k a = Nil
                 | Tip {-# UNPACK #-} !Key_ a
-                | Bin {-# UNPACK #-} !Prefix {-# UNPACK #-} !Mask !(EnumMap k a) !(EnumMap k a) 
+                | Bin {-# UNPACK #-} !Prefix {-# UNPACK #-} !Mask !(EnumMap k a) !(EnumMap k a)
+  deriving (Data, Typeable, Generic)
 
 type Prefix = Int
 type Mask   = Int
@@ -261,24 +264,6 @@ instance Foldable (EnumMap k) where
     foldMap _ Nil = mempty
     foldMap f (Tip _k v) = f v
     foldMap f (Bin _ _ l r) = foldMap f l `mappend` foldMap f r
-
-#if __GLASGOW_HASKELL__
-
-{--------------------------------------------------------------------
-  A Data instance  
---------------------------------------------------------------------}
-
--- This instance preserves data abstraction at the cost of inefficiency.
--- We omit reflection services for the sake of data abstraction.
-
-instance (Data a, Data k, Enum k) => Data (EnumMap k a) where
-  gfoldl f z im = z fromList `f` (toList im)
-  toConstr _    = error "toConstr"
-  gunfold _ _   = error "gunfold"
-  dataTypeOf _  = mkNorepType "Data.EnumMap.EnumMap"
-  dataCast1 f   = gcast1 f
-
-#endif
 
 {--------------------------------------------------------------------
   Query
@@ -331,10 +316,10 @@ lookup k t
 lookupN :: Nat -> EnumMap k a -> Maybe a
 lookupN k t
   = case t of
-      Bin _ m l r 
+      Bin _ m l r
         | zeroN k (natFromInt m) -> lookupN k l
         | otherwise              -> lookupN k r
-      Tip kx x 
+      Tip kx x
         | (k == natFromInt kx)  -> Just x
         | otherwise             -> Nothing
       Nil -> Nothing
@@ -395,7 +380,7 @@ singleton k x
 insert :: (Enum k) => k -> a -> EnumMap k a -> EnumMap k a
 insert k x t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         | nomatch k p m -> join k' (Tip k' x) p t
         | zero k m      -> Bin p m (insert k x l) r
         | otherwise     -> Bin p m l (insert k x r)
@@ -408,7 +393,7 @@ insert k x t
 
 -- right-biased insertion, used by 'union'
 -- | /O(min(n,W))/. Insert with a combining function.
--- @'insertWith' f key value mp@ 
+-- @'insertWith' f key value mp@
 -- will insert the pair (key, value) into @mp@ if key does
 -- not exist in the map. If the key does exist, the function will
 -- insert @f new_value old_value@.
@@ -422,7 +407,7 @@ insertWith f k x t
   = insertWithKey (\_ x' y' -> f x' y') k x t
 
 -- | /O(min(n,W))/. Insert with a combining function.
--- @'insertWithKey' f key value mp@ 
+-- @'insertWithKey' f key value mp@
 -- will insert the pair (key, value) into @mp@ if key does
 -- not exist in the map. If the key does exist, the function will
 -- insert @f key new_value old_value@.
@@ -435,11 +420,11 @@ insertWith f k x t
 insertWithKey :: (Enum k) => (k -> a -> a -> a) -> k -> a -> EnumMap k a -> EnumMap k a
 insertWithKey f k x t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         | nomatch k p m -> join k' (Tip k' x) p t
         | zero k m      -> Bin p m (insertWithKey f k x l) r
         | otherwise     -> Bin p m l (insertWithKey f k x r)
-      Tip ky y 
+      Tip ky y
         | k' == ky      -> Tip k' (f k x y)
         | otherwise     -> join k' (Tip k' x) ky t
       Nil -> Tip k' x
@@ -464,11 +449,11 @@ insertWithKey f k x t
 insertLookupWithKey :: (Enum k) => (k -> a -> a -> a) -> k -> a -> EnumMap k a -> (Maybe a, EnumMap k a)
 insertLookupWithKey f k x t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         | nomatch k p m -> (Nothing,join k' (Tip k' x) p t)
         | zero k m      -> let (found,l') = insertLookupWithKey f k x l in (found,Bin p m l' r)
         | otherwise     -> let (found,r') = insertLookupWithKey f k x r in (found,Bin p m l r')
-      Tip ky y 
+      Tip ky y
         | k' == ky      -> (Just y,Tip k' (f k x y))
         | otherwise     -> (Nothing,join k' (Tip k' x) ky t)
       Nil -> (Nothing,Tip k' x)
@@ -489,7 +474,7 @@ insertLookupWithKey f k x t
 delete :: (Enum k) => k -> EnumMap k a -> EnumMap k a
 delete k t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         | nomatch k p m -> t
         | zero k m      -> bin p m (delete k l) r
         | otherwise     -> bin p m l (delete k r)
@@ -547,11 +532,11 @@ update f k m
 updateWithKey :: (Enum k) => (k -> a -> Maybe a) -> k -> EnumMap k a -> EnumMap k a
 updateWithKey f k t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         | nomatch k p m -> t
         | zero k m      -> bin p m (updateWithKey f k l) r
         | otherwise     -> bin p m l (updateWithKey f k r)
-      Tip ky y 
+      Tip ky y
         | k' == ky      -> case (f k y) of
                              Just y' -> Tip ky y'
                              Nothing -> Nil
@@ -572,11 +557,11 @@ updateWithKey f k t
 updateLookupWithKey :: (Enum k) => (k -> a -> Maybe a) -> k -> EnumMap k a -> (Maybe a,EnumMap k a)
 updateLookupWithKey f k t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         | nomatch k p m -> (Nothing,t)
         | zero k m      -> let (found,l') = updateLookupWithKey f k l in (found,bin p m l' r)
         | otherwise     -> let (found,r') = updateLookupWithKey f k r in (found,bin p m l r')
-      Tip ky y 
+      Tip ky y
         | k' == ky      -> case (f k y) of
                              Just y' -> (Just y,Tip ky y')
                              Nothing -> (Just y,Nil)
@@ -592,13 +577,13 @@ updateLookupWithKey f k t
 alter :: (Maybe a -> Maybe a) -> Int -> EnumMap k a -> EnumMap k a
 alter f k t
   = case t of
-      Bin p m l r 
-        | nomatch k p m -> case f Nothing of 
+      Bin p m l r
+        | nomatch k p m -> case f Nothing of
                              Nothing -> t
                              Just x -> join k (Tip k x) p t
         | zero k m      -> bin p m (alter f k l) r
         | otherwise     -> bin p m l (alter f k r)
-      Tip ky y          
+      Tip ky y
         | k==ky         -> case f (Just y) of
                              Just x -> Tip ky x
                              Nothing -> Nil
@@ -735,7 +720,7 @@ differenceWith f m1 m2
 -- | /O(n+m)/. Difference with a combining function. When two equal keys are
 -- encountered, the combining function is applied to the key and both values.
 -- If it returns 'Nothing', the element is discarded (proper set difference).
--- If it returns (@'Just' y@), the element is updated with a new value @y@. 
+-- If it returns (@'Just' y@), the element is updated with a new value @y@.
 --
 -- > let f k al ar = if al == "b" then Just ((show k) ++ ":" ++ al ++ "|" ++ ar) else Nothing
 -- > differenceWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (3, "B"), (10, "C")])
@@ -756,7 +741,7 @@ differenceWithKey f t1@(Bin p1 m1 l1 r1) t2@(Bin p2 m2 l2 r2)
                 | zero p1 m2        = differenceWithKey f t1 l2
                 | otherwise         = differenceWithKey f t1 r2
 
-differenceWithKey f t1@(Tip k x) t2 
+differenceWithKey f t1@(Tip k x) t2
   = case lookup (toEnum k) t2 of
       Just y  -> case f (toEnum k) x y of
                    Just y' -> Tip k y'
@@ -833,7 +818,7 @@ intersectionWithKey f (Tip k x) t2
     in case lookup k' t2 of
       Just y  -> Tip k (f k' x y)
       Nothing -> Nil
-intersectionWithKey f t1 (Tip k y) 
+intersectionWithKey f t1 (Tip k y)
   = let k' = toEnum k
     in case lookup k' t1 of
       Just x  -> Tip k (f k' x y)
@@ -902,7 +887,7 @@ maxViewWithKey t
         Nil -> Nothing
 
 maxViewUnsigned :: (Enum k) => EnumMap k a -> ((k, a), EnumMap k a)
-maxViewUnsigned t 
+maxViewUnsigned t
     = case t of
         Bin p m l r -> let (result,t') = maxViewUnsigned r in (result,bin p m l t')
         Tip k y -> ((toEnum k,y), Nil)
@@ -923,7 +908,7 @@ minViewWithKey t
         Nil -> Nothing
 
 minViewUnsigned :: (Enum k) => EnumMap k a -> ((k, a), EnumMap k a)
-minViewUnsigned t 
+minViewUnsigned t
     = case t of
         Bin p m l r -> let (result,t') = minViewUnsigned l in (result,bin p m t' r)
         Tip k y -> ((toEnum k,y),Nil)
@@ -988,7 +973,7 @@ deleteMax = maybe (error "deleteMax: empty map has no maximal element") snd . ma
 {--------------------------------------------------------------------
   Submap
 --------------------------------------------------------------------}
--- | /O(n+m)/. Is this a proper submap? (ie. a submap but not equal). 
+-- | /O(n+m)/. Is this a proper submap? (ie. a submap but not equal).
 -- Defined as (@'isProperSubmapOf' = 'isProperSubmapOfBy' (==)@).
 isProperSubmapOf :: (Enum k, Eq a) => EnumMap k a -> EnumMap k a -> Bool
 isProperSubmapOf m1 m2
@@ -998,14 +983,14 @@ isProperSubmapOf m1 m2
  The expression (@'isProperSubmapOfBy' f m1 m2@) returns 'True' when
  @m1@ and @m2@ are not equal,
  all keys in @m1@ are in @m2@, and when @f@ returns 'True' when
- applied to their respective values. For example, the following 
+ applied to their respective values. For example, the following
  expressions are all 'True':
- 
+
   > isProperSubmapOfBy (==) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
   > isProperSubmapOfBy (<=) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
 
  But the following are all 'False':
- 
+
   > isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)])
   > isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)])
   > isProperSubmapOfBy (<)  (fromList [(1,1)])       (fromList [(1,1),(2,2)])
@@ -1052,15 +1037,15 @@ isSubmapOf m1 m2
 {- | /O(n+m)/.
  The expression (@'isSubmapOfBy' f m1 m2@) returns 'True' if
  all keys in @m1@ are in @m2@, and when @f@ returns 'True' when
- applied to their respective values. For example, the following 
+ applied to their respective values. For example, the following
  expressions are all 'True':
- 
+
   > isSubmapOfBy (==) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
   > isSubmapOfBy (<=) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
   > isSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)])
 
  But the following are all 'False':
- 
+
   > isSubmapOfBy (==) (fromList [(1,2)]) (fromList [(1,1),(2,2)])
   > isSubmapOfBy (<) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
   > isSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)])
@@ -1069,7 +1054,7 @@ isSubmapOfBy :: (Enum k) => (a -> b -> Bool) -> EnumMap k a -> EnumMap k b -> Bo
 isSubmapOfBy predicate t1@(Bin p1 m1 l1 r1) (Bin p2 m2 l2 r2)
   | shorter m1 m2  = False
   | shorter m2 m1  = match p1 p2 m2 && (if zero p1 m2 then isSubmapOfBy predicate t1 l2
-                                                      else isSubmapOfBy predicate t1 r2)                     
+                                                      else isSubmapOfBy predicate t1 r2)
   | otherwise      = (p1==p2) && isSubmapOfBy predicate l1 l2 && isSubmapOfBy predicate r1 r2
 isSubmapOfBy _         (Bin _ _ _ _) _ = False
 isSubmapOfBy predicate (Tip k x) t     = case lookup (toEnum k) t of
@@ -1094,7 +1079,7 @@ map f m
 -- > mapWithKey f (fromList [(5,"a"), (3,"b")]) == fromList [(3, "3:b"), (5, "5:a")]
 
 mapWithKey :: (Enum k) => (k -> a -> b) -> EnumMap k a -> EnumMap k b
-mapWithKey f t  
+mapWithKey f t
   = case t of
       Bin p m l r -> Bin p m (mapWithKey f l) (mapWithKey f r)
       Tip k x     -> Tip k (f (toEnum k) x)
@@ -1166,9 +1151,9 @@ filter p m
 filterWithKey :: (Enum k) => (k -> a -> Bool) -> EnumMap k a -> EnumMap k a
 filterWithKey predicate t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         -> bin p m (filterWithKey predicate l) (filterWithKey predicate r)
-      Tip k x 
+      Tip k x
         | predicate (toEnum k) x -> t
         | otherwise              -> Nil
       Nil -> Nil
@@ -1196,11 +1181,11 @@ partition p m
 partitionWithKey :: (Enum k) => (k -> a -> Bool) -> EnumMap k a -> (EnumMap k a,EnumMap k a)
 partitionWithKey predicate t
   = case t of
-      Bin p m l r 
+      Bin p m l r
         -> let (l1,l2) = partitionWithKey predicate l
                (r1,r2) = partitionWithKey predicate r
            in (bin p m l1 r1, bin p m l2 r2)
-      Tip k x 
+      Tip k x
         | predicate (toEnum k) x -> (t,Nil)
         | otherwise              -> (Nil,t)
       Nil -> (Nil,Nil)
@@ -1316,7 +1301,7 @@ splitLookup k t
                       then let (lt,found,gt) = splitLookup' k l in (union r lt,found, gt)
                       else let (lt,found,gt) = splitLookup' k r in (lt,found, union gt l))
           | otherwise   -> splitLookup' k t
-      Tip ky y 
+      Tip ky y
         | k' > ky      -> (t,Nothing,Nil)
         | k' < ky      -> (Nil,Nothing,t)
         | otherwise -> (Nil,Just y,Nil)
@@ -1330,7 +1315,7 @@ splitLookup' k t
         | nomatch k' p m -> if k' > p then (t,Nothing,Nil) else (Nil,Nothing,t)
         | zero k' m  -> let (lt,found,gt) = splitLookup k l in (lt,found,union gt r)
         | otherwise  -> let (lt,found,gt) = splitLookup k r in (union l lt,found,gt)
-      Tip ky y 
+      Tip ky y
         | k' > ky      -> (t,Nothing,Nil)
         | k' < ky      -> (Nil,Nothing,t)
         | otherwise -> (Nil,Just y,Nil)
@@ -1384,7 +1369,7 @@ foldr' f z t
 
 
 {--------------------------------------------------------------------
-  List variations 
+  List variations
 --------------------------------------------------------------------}
 -- | /O(n)/.
 -- Return all elements of the map in the ascending order of their keys.
@@ -1425,7 +1410,7 @@ assocs m
 
 
 {--------------------------------------------------------------------
-  Lists 
+  Lists
 --------------------------------------------------------------------}
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 --
@@ -1442,7 +1427,7 @@ toList t
 -- > toAscList (fromList [(5,"a"), (3,"b")]) == [(3,"b"), (5,"a")]
 
 toAscList :: (Num k, Ord k, Enum k) => EnumMap k a -> [(k,a)]
-toAscList t   
+toAscList t
   = -- NOTE: the following algorithm only works for big-endian trees
     let (pos,neg) = span (\(k,_) -> k >=0) (foldr (\k x xs -> (k,x):xs) [] t) in neg ++ pos
 
@@ -1463,7 +1448,7 @@ fromList xs
 -- > fromListWith (++) [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"a")] == fromList [(3, "ab"), (5, "aba")]
 -- > fromListWith (++) [] == empty
 
-fromListWith :: (Enum k) => (a -> a -> a) -> [(k,a)] -> EnumMap k a 
+fromListWith :: (Enum k) => (a -> a -> a) -> [(k,a)] -> EnumMap k a
 fromListWith f xs
   = fromListWithKey (\_ x y -> f x y) xs
 
@@ -1472,8 +1457,8 @@ fromListWith f xs
 -- > fromListWith (++) [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"a")] == fromList [(3, "ab"), (5, "aba")]
 -- > fromListWith (++) [] == empty
 
-fromListWithKey :: (Enum k) => (k -> a -> a -> a) -> [(k,a)] -> EnumMap k a 
-fromListWithKey f xs 
+fromListWithKey :: (Enum k) => (k -> a -> a -> a) -> [(k,a)] -> EnumMap k a
+fromListWithKey f xs
   = foldlStrict ins empty xs
   where
     ins t (k,x) = insertWithKey f k x t
@@ -1517,7 +1502,7 @@ fromDistinctAscList xs
 
 
 {--------------------------------------------------------------------
-  Eq 
+  Eq
 --------------------------------------------------------------------}
 instance Eq a => Eq (EnumMap k a) where
   t1 == t2  = equal t1 t2
@@ -1525,7 +1510,7 @@ instance Eq a => Eq (EnumMap k a) where
 
 equal :: Eq a => EnumMap k a -> EnumMap k a -> Bool
 equal (Bin p1 m1 l1 r1) (Bin p2 m2 l2 r2)
-  = (m1 == m2) && (p1 == p2) && (equal l1 l2) && (equal r1 r2) 
+  = (m1 == m2) && (p1 == p2) && (equal l1 l2) && (equal r1 r2)
 equal (Tip kx x) (Tip ky y)
   = (kx == ky) && (x==y)
 equal Nil Nil = True
@@ -1533,28 +1518,28 @@ equal _   _   = False
 
 nequal :: Eq a => EnumMap k a -> EnumMap k a -> Bool
 nequal (Bin p1 m1 l1 r1) (Bin p2 m2 l2 r2)
-  = (m1 /= m2) || (p1 /= p2) || (nequal l1 l2) || (nequal r1 r2) 
+  = (m1 /= m2) || (p1 /= p2) || (nequal l1 l2) || (nequal r1 r2)
 nequal (Tip kx x) (Tip ky y)
   = (kx /= ky) || (x/=y)
 nequal Nil Nil = False
 nequal _   _   = True
 
 {--------------------------------------------------------------------
-  Ord 
+  Ord
 --------------------------------------------------------------------}
 
 instance (Ord k, Ord a, Enum k) => Ord (EnumMap k a) where
     compare m1 m2 = compare (toList m1) (toList m2)
 
 {--------------------------------------------------------------------
-  Functor 
+  Functor
 --------------------------------------------------------------------}
 
 instance (Enum k) => Functor (EnumMap k) where
     fmap = map
 
 {--------------------------------------------------------------------
-  Show 
+  Show
 --------------------------------------------------------------------}
 
 instance (Show a, Show k, Enum k) => Show (EnumMap k a) where
@@ -1565,14 +1550,14 @@ instance (Show a, Show k, Enum k) => Show (EnumMap k a) where
 XXX unused code
 
 showMap :: (Show a) => [(Key,a)] -> ShowS
-showMap []     
-  = showString "{}" 
-showMap (x:xs) 
+showMap []
+  = showString "{}"
+showMap (x:xs)
   = showChar '{' . showElem x . showTail xs
   where
     showTail []     = showChar '}'
     showTail (x':xs') = showChar ',' . showElem x' . showTail xs'
-    
+
     showElem (k,v)  = shows k . showString ":=" . shows v
 -}
 
@@ -1593,13 +1578,6 @@ instance (Read e, Read k, Enum k) => Read (EnumMap k e) where
     (xs,t) <- reads s
     return (fromList xs,t)
 #endif
-
-{--------------------------------------------------------------------
-  Typeable
---------------------------------------------------------------------}
-
-#include "Typeable.h"
-INSTANCE_TYPEABLE1((EnumMap k),intMapTc,"EnumMap")
 
 {--------------------------------------------------------------------
   Debugging
@@ -1631,29 +1609,29 @@ showsTree wide lbars rbars t
              showWide wide lbars .
              showsTree wide (withEmpty lbars) (withBar lbars) l
       Tip k x
-          -> showsBars lbars . showString " " . shows k . showString ":=" . shows x . showString "\n" 
+          -> showsBars lbars . showString " " . shows k . showString ":=" . shows x . showString "\n"
       Nil -> showsBars lbars . showString "|\n"
 
 showsTreeHang :: Show a => Bool -> [String] -> EnumMap k a -> ShowS
 showsTreeHang wide bars t
   = case t of
       Bin p m l r
-          -> showsBars bars . showString (showBin p m) . showString "\n" . 
+          -> showsBars bars . showString (showBin p m) . showString "\n" .
              showWide wide bars .
              showsTreeHang wide (withBar bars) l .
              showWide wide bars .
              showsTreeHang wide (withEmpty bars) r
       Tip k x
-          -> showsBars bars . showString " " . shows k . showString ":=" . shows x . showString "\n" 
-      Nil -> showsBars bars . showString "|\n" 
+          -> showsBars bars . showString " " . shows k . showString ":=" . shows x . showString "\n"
+      Nil -> showsBars bars . showString "|\n"
 
 showBin :: Prefix -> Mask -> String
 showBin _ _
   = "*" -- ++ show (p,m)
 
 showWide :: Bool -> [String] -> String -> String
-showWide wide bars 
-  | wide      = showString (concat (reverse bars)) . showString "|\n" 
+showWide wide bars
+  | wide      = showString (concat (reverse bars)) . showString "|\n"
   | otherwise = id
 
 showsBars :: [String] -> ShowS
@@ -1693,7 +1671,7 @@ bin _ _ l Nil = l
 bin _ _ Nil r = r
 bin p m l r   = Bin p m l r
 
-  
+
 {--------------------------------------------------------------------
   Endian independent bit twiddling
 --------------------------------------------------------------------}
@@ -1717,7 +1695,7 @@ zeroN :: Nat -> Nat -> Bool
 zeroN i m = (i .&. m) == 0
 
 {--------------------------------------------------------------------
-  Big endian operations  
+  Big endian operations
 --------------------------------------------------------------------}
 maskW :: Nat -> Nat -> Prefix
 maskW i m
@@ -1730,21 +1708,21 @@ shorter m1 m2
 branchMask :: Prefix -> Prefix -> Mask
 branchMask p1 p2
   = intFromNat (highestBitMask (natFromInt p1 `xor` natFromInt p2))
-  
+
 {----------------------------------------------------------------------
   Finding the highest bit (mask) in a word [x] can be done efficiently in
   three ways:
-  * convert to a floating point value and the mantissa tells us the 
-    [log2(x)] that corresponds with the highest bit position. The mantissa 
-    is retrieved either via the standard C function [frexp] or by some bit 
-    twiddling on IEEE compatible numbers (float). Note that one needs to 
-    use at least [double] precision for an accurate mantissa of 32 bit 
+  * convert to a floating point value and the mantissa tells us the
+    [log2(x)] that corresponds with the highest bit position. The mantissa
+    is retrieved either via the standard C function [frexp] or by some bit
+    twiddling on IEEE compatible numbers (float). Note that one needs to
+    use at least [double] precision for an accurate mantissa of 32 bit
     numbers.
   * use bit twiddling, a logarithmic sequence of bitwise or's and shifts (bit).
   * use processor specific assembler instruction (asm).
 
   The most portable way would be [bit], but is it efficient enough?
-  I have measured the cycle counts of the different methods on an AMD 
+  I have measured the cycle counts of the different methods on an AMD
   Athlon-XP 1800 (~ Pentium III 1.8Ghz) using the RDTSC instruction:
 
   highestBitMask: method  cycles
@@ -1767,7 +1745,7 @@ branchMask p1 p2
 
 {----------------------------------------------------------------------
   [highestBitMask] returns a word where only the highest bit is set.
-  It is found by first setting all bits in lower positions than the 
+  It is found by first setting all bits in lower positions than the
   highest bit and than taking an exclusive or with the original value.
   Allthough the function may look expensive, GHC compiles this into
   excellent C code that subsequently compiled into highly efficient
@@ -1785,7 +1763,7 @@ highestBitMask x0
 
 
 {--------------------------------------------------------------------
-  Utilities 
+  Utilities
 --------------------------------------------------------------------}
 foldlStrict :: (a -> b -> a) -> a -> [b] -> a
 foldlStrict f z xs
@@ -1838,7 +1816,7 @@ prop_InsertDelete :: Key -> Int -> EnumMap Int -> Property
 prop_InsertDelete k x t
   = not (member k t) ==> delete k (insert k x t) == t
 
-prop_UpdateDelete :: Key -> EnumMap Int -> Bool  
+prop_UpdateDelete :: Key -> EnumMap Int -> Bool
 prop_UpdateDelete k t
   = update (const Nothing) k t == delete k t
 
@@ -1861,12 +1839,12 @@ prop_UnionComm t1 t2
 
 prop_Diff :: [(Key,Int)] -> [(Key,Int)] -> Bool
 prop_Diff xs ys
-  =  List.sort (keys (difference (fromListWith (+) xs) (fromListWith (+) ys))) 
+  =  List.sort (keys (difference (fromListWith (+) xs) (fromListWith (+) ys)))
     == List.sort ((List.\\) (nub (Prelude.map fst xs))  (nub (Prelude.map fst ys)))
 
 prop_Int :: [(Key,Int)] -> [(Key,Int)] -> Bool
 prop_Int xs ys
-  =  List.sort (keys (intersection (fromListWith (+) xs) (fromListWith (+) ys))) 
+  =  List.sort (keys (intersection (fromListWith (+) xs) (fromListWith (+) ys)))
     == List.sort (nub ((List.intersect) (Prelude.map fst xs)  (Prelude.map fst ys)))
 
 {--------------------------------------------------------------------
@@ -1874,7 +1852,7 @@ prop_Int xs ys
 --------------------------------------------------------------------}
 prop_Ordered
   = forAll (choose (5,100)) $ \n ->
-    let xs = [(x,()) | x <- [0..n::Int]] 
+    let xs = [(x,()) | x <- [0..n::Int]]
     in fromAscList xs == fromList xs
 
 prop_List :: [Key] -> Bool
@@ -1883,7 +1861,7 @@ prop_List xs
 
 
 {--------------------------------------------------------------------
-  updateMin / updateMax 
+  updateMin / updateMax
 --------------------------------------------------------------------}
 prop_UpdateMinMax :: [Key] -> Bool
 prop_UpdateMinMax xs =
