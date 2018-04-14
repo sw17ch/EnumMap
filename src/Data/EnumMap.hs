@@ -45,7 +45,7 @@
 
 module Data.EnumMap  (
             -- * Map type
-              EnumMap, Key_          -- instance Eq,Show
+              EnumMap(..), Key_          -- instance Eq,Show
 
             -- * Operators
             , (!), (\\)
